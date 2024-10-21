@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teleprompter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <video id="video" width="1088" height="1920" autoplay></video>
+        <div class="teleprompter">
+            <div id="script">
+                Your script goes here...
+            </div>
+        </div>
+        <div class="controls">
+            <button id="btnPlay">Play</button>
+            <button id="btnPause">Pause</button>
+            <input type="range" id="speedRange" min="1" max="6" value="2">
+            <button id="btnRecord">Record</button>
+            <button id="btnRestart">Restart</button>
+            <button id="btnToggleTextarea">Input Text</button>
+            <!-- <select id="resolutionSelect">
+                <option value="640x480">480p</option>
+                <option value="1280x720">720p</option>
+                <option value="1920x1088">1080p</option>
+                <option value="2560x1440">1440p</option>
+                <option value="3840x2160">2160p</option>
+            </select> -->
+            <select id="cameraSelect">
+                <option value="user">Front Camera</option>
+                <option value="environment">Rear Camera</option>
+            </select>
+        </div>
+        <textarea id="scriptInput" placeholder="Enter your script here..." style="height: 100px;" hidden></textarea>
+    </div>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.10.0/dist/ffmpeg.min.js"></script> -->
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #000;
+    color: #fff;
+    font-family: Arial, sans-serif;
+}
+
+.container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-width: 800px; /* Limit the maximum width for better readability */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+video {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    z-index: 1;
+    transform: scaleX(-1);
+}
+
+.teleprompter {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+#script {
+    position: absolute;
+    top: 100%;
+    width: 60%;
+    font-size: 26px;
+    padding: 20px;
+    box-sizing: border-box;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: pre-wrap;
+}
+
+.controls {
+    position: relative;
+    bottom: 10px;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    z-index: 3;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.controls button, .controls select, .controls input[type="range"] {
+    flex: 1 1 auto;
+    margin: 5px;
+    max-width: 150px;
+}
+
+#scriptInput {
+    position: relative;
+    width: 100%;
+    height: 100px;
+    z-index: 3;
+    padding: 10px;
+    box-sizing: border-box;
+    font-size: 16px;
+    margin-top: 10px;
+}
+
+/* Media query for smaller screens */
+@media (max-width: 600px) {
+    #script {
+        width: 80%;
+        font-size: 18px;
+    }
+
+    .controls button, .controls select, .controls input[type="range"] {
+        max-width: 100px;
+    }
+
+    #scriptInput {
+        height: 80px;
+        font-size: 14px;
+    }
+}
