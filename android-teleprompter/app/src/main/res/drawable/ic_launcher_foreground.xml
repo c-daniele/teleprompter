@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Background circle -->
+    <path
+        android:fillColor="#FF6200EE"
+        android:pathData="M54,54m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0" />
+    
+    <!-- Camera body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M25,35h58c3,0 5,2 5,5v28c0,3 -2,5 -5,5H25c-3,0 -5,-2 -5,-5V40c0,-3 2,-5 5,-5z" />
+    
+    <!-- Camera lens -->
+    <path
+        android:fillColor="#FF6200EE"
+        android:pathData="M54,54m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0" />
+    
+    <!-- Inner lens -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+    
+    <!-- Viewfinder -->
+    <path
+        android:fillColor="#FF6200EE"
+        android:pathData="M75,42h6v4h-6z" />
+    
+    <!-- Text lines representing teleprompter script -->
+    <path
+        android:fillColor="#FFB3E5FC"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFB3E5FC"
+        android:pathData="M30,25h20M30,29h25M30,33h18" />
+</vector>

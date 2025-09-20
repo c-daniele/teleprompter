@@ -7,6 +7,7 @@ const btnRestart = document.getElementById('btnRestart');
 const scriptInput = document.getElementById('scriptInput');
 // const resolutionSelect = document.getElementById('resolutionSelect');
 const cameraSelect = document.getElementById('cameraSelect');
+const micSelect = document.getElementById('microphoneSelect');
 const btnToggleTextarea = document.getElementById('btnToggleTextarea');
 const video = document.getElementById('video');
 
@@ -15,6 +16,18 @@ let isScrolling = false;
 let scrollInterval;
 let mediaRecorder;
 let recordedChunks = [];
+
+async function getMicrophones() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioDevices = devices.filter(device => device.kind === 'audioinput');
+
+    audioDevices.forEach(device => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.text = device.label || `Microfono ${micSelect.length + 1}`;
+      micSelect.appendChild(option);
+    });
+  }
 
 btnToggleTextarea.addEventListener('click', () => {
     scriptInput.toggleAttribute('hidden');
@@ -99,12 +112,13 @@ function resetStream() {
         btnRecord.textContent = "Record";
     }
 
+    const selectedDeviceId = micSelect.value;
     navigator.mediaDevices.getUserMedia({
         video: {
             ...getResolutionConstraints(),
             ...getCameraConstraints()
         },
-        audio: true
+        audio: { deviceId: selectedDeviceId }
     })
     .then(stream => {
         video.srcObject = stream;
@@ -156,3 +170,8 @@ function startRecording() {
     recordedChunks = [];
     mediaRecorder.start();
 }
+
+ // Chiedi il permesso di accesso ai dispositivi e popola il menu
+ navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+    .then(getMicrophones)
+    .catch(error => console.error('Errore nell\'accesso ai dispositivi:', error));
