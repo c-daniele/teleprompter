@@ -3,3 +3,5 @@ android-teleprompter/.idea/*
 android-teleprompter/gradle/wrapper/gradle-wrapper.jar
 android-teleprompter/.gradle/8.4/executionHistory/executionHistory*
 android-teleprompter/app/src/main/res/.DS_Store
+android-teleprompter/.gradle/8.4/fileHashes/*
+android-teleprompter/.gradle/8.4/fileHashes/fileHashes.bin

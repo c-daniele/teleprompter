@@ -3,8 +3,10 @@ package com.teleprompter
 import android.Manifest
 import android.animation.ValueAnimator
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.MediaStore
 import android.text.Editable
 import android.text.TextWatcher
@@ -35,8 +37,10 @@ class MainActivity : AppCompatActivity() {
     private var recording: Recording? = null
     private lateinit var cameraExecutor: ExecutorService
     private var scrollAnimator: ValueAnimator? = null
-    private var scrollSpeed = 2f
+    private var scrollSpeed = 0.5f
     private var isScrolling = false
+    private var accumulatedScroll = 0f
+    private var wakeLock: PowerManager.WakeLock? = null
     
     private val activityResultLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -56,6 +60,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(viewBinding.root)
+
+        // Initialize wake lock
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            "Teleprompter::RecordingWakeLock"
+        )
 
         if (allPermissionsGranted()) {
             startCamera()
@@ -110,13 +121,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSpeedControl() {
+        // Set initial speed value display
+        updateSpeedDisplay()
+        
         viewBinding.speedSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                scrollSpeed = (progress + 1).toFloat()
+                // Map progress (0-100) to speed range (0.1-3.0)
+                scrollSpeed = 0.1f + (progress / 100f) * 2.9f
+                updateSpeedDisplay()
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
+    }
+    
+    private fun updateSpeedDisplay() {
+        viewBinding.speedValue.text = String.format("%.1f", scrollSpeed)
     }
 
     private fun startScrolling() {
@@ -124,12 +144,17 @@ class MainActivity : AppCompatActivity() {
         isScrolling = true
         
         scrollAnimator?.cancel()
-        scrollAnimator = ValueAnimator.ofInt(0, Int.MAX_VALUE).apply {
+        // Reset accumulated scroll when starting
+        accumulatedScroll = viewBinding.scriptScrollView.scrollY.toFloat()
+        
+        scrollAnimator = ValueAnimator.ofFloat(0f, Float.MAX_VALUE).apply {
             duration = Long.MAX_VALUE
             addUpdateListener { animator ->
                 if (isScrolling) {
-                    val scrollY = viewBinding.scriptScrollView.scrollY + scrollSpeed.toInt()
-                    viewBinding.scriptScrollView.scrollTo(0, scrollY)
+                    // Accumulate fractional pixels
+                    accumulatedScroll += scrollSpeed
+                    val targetScrollY = accumulatedScroll.toInt()
+                    viewBinding.scriptScrollView.scrollTo(0, targetScrollY)
                 }
             }
             start()
@@ -144,6 +169,7 @@ class MainActivity : AppCompatActivity() {
     private fun restartScript() {
         pauseScrolling()
         viewBinding.scriptScrollView.scrollTo(0, 0)
+        accumulatedScroll = 0f
     }
 
     private fun toggleScriptInput() {
@@ -211,6 +237,12 @@ class MainActivity : AppCompatActivity() {
         if (curRecording != null) {
             curRecording.stop()
             recording = null
+            // Release wake lock when stopping recording
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                }
+            }
             return
         }
 
@@ -237,12 +269,21 @@ class MainActivity : AppCompatActivity() {
             .start(ContextCompat.getMainExecutor(this)) { recordEvent ->
                 when (recordEvent) {
                     is VideoRecordEvent.Start -> {
+                        // Acquire wake lock when recording starts
+                        wakeLock?.acquire(10*60*1000L /*10 minutes*/)
                         viewBinding.btnRecord.apply {
                             text = "Stop"
                             isEnabled = true
                         }
                     }
                     is VideoRecordEvent.Finalize -> {
+                        // Release wake lock when recording finishes
+                        wakeLock?.let {
+                            if (it.isHeld) {
+                                it.release()
+                            }
+                        }
+                        
                         if (!recordEvent.hasError()) {
                             val msg = "Video capture succeeded: ${recordEvent.outputResults.outputUri}"
                             Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
@@ -273,6 +314,13 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         cameraExecutor.shutdown()
         scrollAnimator?.cancel()
+        
+        // Release wake lock if still held
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
     }
 
     companion object {
