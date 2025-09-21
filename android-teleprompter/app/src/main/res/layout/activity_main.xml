@@ -151,6 +151,14 @@
                 android:layout_margin="4dp"
                 android:text="Input Text" />
 
+            <Button
+                android:id="@+id/btnVideoEditor"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="4dp"
+                android:text="Edit Video" />
+
         </LinearLayout>
 
         <LinearLayout

@@ -4,6 +4,7 @@ import android.Manifest
 import android.animation.ValueAnimator
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.PowerManager
@@ -108,6 +109,7 @@ class MainActivity : AppCompatActivity() {
         viewBinding.btnRestart.setOnClickListener { restartScript() }
         viewBinding.btnRecord.setOnClickListener { captureVideo() }
         viewBinding.btnToggleInput.setOnClickListener { toggleScriptInput() }
+        viewBinding.btnVideoEditor.setOnClickListener { openVideoEditor() }
     }
 
     private fun setupScriptInput() {
@@ -288,6 +290,9 @@ class MainActivity : AppCompatActivity() {
                             val msg = "Video capture succeeded: ${recordEvent.outputResults.outputUri}"
                             Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
                             Log.d(TAG, msg)
+                            
+                            // Offer to edit the video
+                            Toast.makeText(baseContext, "Tap 'Edit Video' to edit your recording", Toast.LENGTH_LONG).show()
                         } else {
                             recording?.close()
                             recording = null
@@ -308,6 +313,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+    
+    private fun openVideoEditor() {
+        val intent = Intent(this, VideoEditingActivity::class.java)
+        // For now, we'll open the editor without a specific video
+        // In a real app, you might want to show a file picker or use the last recorded video
+        startActivity(intent)
     }
 
     override fun onDestroy() {

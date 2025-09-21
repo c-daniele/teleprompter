@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="120dp"
+    android:layout_height="80dp"
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:layout_margin="4dp"
+    android:background="@android:color/darker_gray"
+    android:elevation="2dp">
+
+    <TextView
+        android:id="@+id/clipName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Clip Name"
+        android:textSize="12sp"
+        android:textColor="@android:color/white"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/clipDuration"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="00:30"
+        android:textSize="10sp"
+        android:textColor="@android:color/white"
+        android:layout_marginTop="2dp" />
+
+    <TextView
+        android:id="@+id/clipEffects"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="No effects"
+        android:textSize="9sp"
+        android:textColor="@android:color/holo_blue_light"
+        android:layout_marginTop="2dp"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+</LinearLayout>
