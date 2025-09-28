@@ -2,9 +2,14 @@ package com.teleprompter
 
 import android.Manifest
 import android.animation.ValueAnimator
+import android.content.BroadcastReceiver
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.MediaStore
@@ -17,6 +22,7 @@ import android.widget.ArrayAdapter
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresPermission
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -41,6 +47,17 @@ class MainActivity : AppCompatActivity() {
     private var isScrolling = false
     private var accumulatedScroll = 0f
     private var wakeLock: PowerManager.WakeLock? = null
+    private lateinit var audioManager: AudioManager
+    private var availableMicrophones = mutableListOf<MicrophoneInfo>()
+    private var selectedMicrophoneIndex = 0
+    
+    data class MicrophoneInfo(
+        val deviceInfo: AudioDeviceInfo?,
+        val displayName: String,
+        val isBuiltIn: Boolean
+    )
+    
+    private var audioDeviceCallback: Any? = null
     
     private val activityResultLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -67,6 +84,11 @@ class MainActivity : AppCompatActivity() {
             PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
             "Teleprompter::RecordingWakeLock"
         )
+        
+        // Initialize audio manager and microphone detection
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        initializeAudioDeviceCallback()
+        updateAvailableMicrophones()
 
         if (allPermissionsGranted()) {
             startCamera()
@@ -80,6 +102,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupUI() {
         setupCameraSpinner()
+        setupMicrophoneSpinner()
         setupControls()
         setupScriptInput()
         setupSpeedControl()
@@ -97,6 +120,16 @@ class MainActivity : AppCompatActivity() {
         viewBinding.cameraSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 switchCamera(position)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+    
+    private fun setupMicrophoneSpinner() {
+        viewBinding.microphoneSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                selectedMicrophoneIndex = position
+                Log.d(TAG, "Selected microphone: ${availableMicrophones.getOrNull(position)?.displayName}")
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -263,7 +296,7 @@ class MainActivity : AppCompatActivity() {
             .apply {
                 if (PermissionChecker.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) ==
                     PermissionChecker.PERMISSION_GRANTED) {
-                    withAudioEnabled()
+                    configureSelectedMicrophone()
                 }
             }
             .start(ContextCompat.getMainExecutor(this)) { recordEvent ->
@@ -283,6 +316,9 @@ class MainActivity : AppCompatActivity() {
                                 it.release()
                             }
                         }
+                        
+                        // Reset audio configuration when recording stops
+                        resetAudioConfiguration()
                         
                         if (!recordEvent.hasError()) {
                             val msg = "Video capture succeeded: ${recordEvent.outputResults.outputUri}"
@@ -310,10 +346,219 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
+    private fun updateAvailableMicrophones() {
+        availableMicrophones.clear()
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+            
+            // Add built-in microphone
+            availableMicrophones.add(MicrophoneInfo(null, "Built-in Microphone", true))
+            
+            // Add external microphones
+            devices.forEach { device ->
+                when (device.type) {
+                    AudioDeviceInfo.TYPE_WIRED_HEADSET -> {
+                        availableMicrophones.add(MicrophoneInfo(device, "Wired Headset Microphone", false))
+                    }
+                    AudioDeviceInfo.TYPE_USB_HEADSET -> {
+                        availableMicrophones.add(MicrophoneInfo(device, "USB Headset Microphone", false))
+                    }
+                    AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> {
+                        availableMicrophones.add(MicrophoneInfo(device, "Bluetooth Microphone", false))
+                    }
+                    AudioDeviceInfo.TYPE_USB_DEVICE -> {
+                        if (device.isSource) {
+                            availableMicrophones.add(MicrophoneInfo(device, "USB Microphone", false))
+                        }
+                    }
+                }
+            }
+        } else {
+            // For older Android versions, just show basic options
+            availableMicrophones.add(MicrophoneInfo(null, "Built-in Microphone", true))
+            if (audioManager.isWiredHeadsetOn) {
+                availableMicrophones.add(MicrophoneInfo(null, "Wired Headset Microphone", false))
+            }
+        }
+        
+        // Update UI on main thread
+        runOnUiThread {
+            updateMicrophoneSpinner()
+        }
+        
+        Log.d(TAG, "Available microphones: ${availableMicrophones.map { it.displayName }}")
+    }
+    
+    private fun updateMicrophoneSpinner() {
+        val microphoneNames = availableMicrophones.map { it.displayName }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, microphoneNames)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        viewBinding.microphoneSpinner.adapter = adapter
+        
+        // Auto-select wired microphone if available and not already selected
+        if (selectedMicrophoneIndex == 0) {
+            val wiredMicIndex = availableMicrophones.indexOfFirst { !it.isBuiltIn }
+            if (wiredMicIndex >= 0) {
+                selectedMicrophoneIndex = wiredMicIndex
+                viewBinding.microphoneSpinner.setSelection(wiredMicIndex)
+            }
+        }
+    }
+    
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
+    private fun PendingRecording.configureSelectedMicrophone() {
+        val selectedMic = availableMicrophones.getOrNull(selectedMicrophoneIndex)
+        
+        if (selectedMic != null) {
+            Log.d(TAG, "Configuring audio with selected microphone: ${selectedMic.displayName}")
+            
+            // Configure audio routing before enabling audio recording
+            configureAudioRouting(selectedMic)
+            
+            // Enable audio recording
+            withAudioEnabled()
+            
+            Log.d(TAG, "Audio recording enabled with microphone: ${selectedMic.displayName}")
+        } else {
+            // Fallback to default audio
+            withAudioEnabled()
+            Log.d(TAG, "Audio enabled with default microphone (no selection)")
+        }
+    }
+    
+    private fun configureAudioRouting(selectedMic: MicrophoneInfo) {
+        try {
+            // First, reset audio routing to default state
+            audioManager.isBluetoothScoOn = false
+            audioManager.isSpeakerphoneOn = false
+            
+            when {
+                selectedMic.deviceInfo?.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> {
+                    // For Bluetooth microphones, start SCO and set audio mode
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.startBluetoothSco()
+                    audioManager.isBluetoothScoOn = true
+                    Log.d(TAG, "Configured Bluetooth SCO for microphone")
+                }
+                selectedMic.deviceInfo?.type == AudioDeviceInfo.TYPE_WIRED_HEADSET -> {
+                    // For wired headsets, set appropriate audio mode
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.isSpeakerphoneOn = false
+                    audioManager.isBluetoothScoOn = false
+                    
+                    // For older Android versions, audio routing is handled by the mode setting
+                    Log.d(TAG, "Configured wired headset routing")
+                }
+                selectedMic.deviceInfo?.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                selectedMic.deviceInfo?.type == AudioDeviceInfo.TYPE_USB_DEVICE -> {
+                    // For USB microphones, set communication mode
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.isSpeakerphoneOn = false
+                    audioManager.isBluetoothScoOn = false
+                    Log.d(TAG, "Configured USB microphone routing")
+                }
+                selectedMic.isBuiltIn -> {
+                    // For built-in microphone, use normal mode
+                    audioManager.mode = AudioManager.MODE_NORMAL
+                    audioManager.isBluetoothScoOn = false
+                    audioManager.isSpeakerphoneOn = false
+                    Log.d(TAG, "Configured built-in microphone routing")
+                }
+                else -> {
+                    // For other external microphones
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.isBluetoothScoOn = false
+                    audioManager.isSpeakerphoneOn = false
+                    Log.d(TAG, "Configured external microphone routing")
+                }
+            }
+            
+            // Give the audio system time to apply the routing changes
+            Thread.sleep(100)
+            
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to configure audio routing for ${selectedMic.displayName}", e)
+        }
+    }
+    
+    private fun resetAudioConfiguration() {
+        try {
+            if (audioManager.isBluetoothScoOn) {
+                audioManager.stopBluetoothSco()
+                audioManager.isBluetoothScoOn = false
+            }
+            audioManager.mode = AudioManager.MODE_NORMAL
+            audioManager.isSpeakerphoneOn = false
+            Log.d(TAG, "Audio configuration reset to normal mode")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to reset audio configuration", e)
+        }
+    }
+    
+    private fun initializeAudioDeviceCallback() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                // Use reflection to avoid compile-time dependency on AudioDeviceCallback
+                val callbackClass = Class.forName("android.media.AudioManager\$AudioDeviceCallback")
+                val callback = java.lang.reflect.Proxy.newProxyInstance(
+                    callbackClass.classLoader,
+                    arrayOf(callbackClass)
+                ) { _, method, _ ->
+                    when (method.name) {
+                        "onAudioDevicesAdded", "onAudioDevicesRemoved" -> {
+                            updateAvailableMicrophones()
+                        }
+                    }
+                    null
+                }
+                
+                // Register the callback using reflection
+                val registerMethod = AudioManager::class.java.getMethod(
+                    "registerAudioDeviceCallback",
+                    callbackClass,
+                    android.os.Handler::class.java
+                )
+                registerMethod.invoke(audioManager, callback, null)
+                audioDeviceCallback = callback
+                
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to initialize audio device callback", e)
+                audioDeviceCallback = null
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
         scrollAnimator?.cancel()
+        
+        // Reset audio configuration
+        try {
+            if (audioManager.isBluetoothScoOn) {
+                audioManager.stopBluetoothSco()
+                audioManager.isBluetoothScoOn = false
+            }
+            // Reset audio mode to normal
+            audioManager.mode = AudioManager.MODE_NORMAL
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to reset audio configuration", e)
+        }
+        
+        // Unregister audio device callback
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && audioDeviceCallback != null) {
+            try {
+                val callbackClass = Class.forName("android.media.AudioManager\$AudioDeviceCallback")
+                val unregisterMethod = AudioManager::class.java.getMethod(
+                    "unregisterAudioDeviceCallback",
+                    callbackClass
+                )
+                unregisterMethod.invoke(audioManager, audioDeviceCallback)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to unregister audio device callback", e)
+            }
+        }
         
         // Release wake lock if still held
         wakeLock?.let {
